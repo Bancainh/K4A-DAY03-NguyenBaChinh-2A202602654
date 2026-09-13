@@ -14,7 +14,7 @@
 | **2. Tool Interaction** | 4 / 5 | Có, Hệ thống phải kết nối với DataBase để đọc ghi dữ liệu.   |
 | **3. Dynamic Decision** | 4 / 5 | Có, luồng xử lý rẽ nhánh linh hoạt theo dữ liệu sống. Ví dụ sẽ bỏ qua các dữ liệu lỗi đã tạo phiếu rework trước đó.  |
 | **4. Long Horizon Goal** | 4 / 5 | Có, Hệ thống phải giữ mục tiêu tạo phiếu Rework đến cuối. Không bị rơi ngữ cảnh ngay cả khi bị ngắt quãng để chờ con người xác nhận.  |
-| **TỔNG ĐIỂM AGENTIC FIT** | **17 / 20** | *Nếu tổng điểm > 12/20: Bài toán rất phù hợp triển khai Agentic System.* |
+| **TỔNG ĐIỂM AGENTIC FIT** | **17 / 20** | Bài toán rất phù hợp triển khai Agentic System. |
 
 
 ---
@@ -52,7 +52,7 @@ Dán 1 đoạn trích xuất log tiêu biểu từ file `docs/trace_waterfall.js
 - [x] Đã điền API Key thật trong `.env` và xác nhận Agent chạy mượt mà trên LLM API thật (Gemini/OpenAI).
 - **Tổng số Test Cases đã chạy thành công:** _5_ / 5 test cases.
 - **Số lượt gọi Tool qua MCP Server chính xác:** _5_ lượt.
-- **Kết quả đẩy Repo nộp bài:** [x ] Đã Commit và Push mã nguồn thành công lên GitHub cá nhân.
+- **Kết quả đẩy Repo nộp bài:** [ ] Đã Commit và Push mã nguồn thành công lên GitHub cá nhân.
 
 ---
 
