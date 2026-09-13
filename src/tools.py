@@ -82,39 +82,84 @@ MOCK_DATABASE = {
 }
 
 def execute_query_defect_data(defect_type: str, shift: str) -> str:
-    """Thực thi tra cứu lỗi từ MOCK_DATABASE"""
-    results = []
-    
-    # Duyệt qua các key-value trong Dictionary
-    for err_id, info in MOCK_DATABASE.items():
-        if info["defect_type"] == defect_type and info["shift"] == shift:
-            # Nhúng thêm mã ID vào kết quả trả về để AI biết cần tạo phiếu cho mã nào
-            record = {"defect_id": err_id}
-            record.update(info)
-            results.append(record)
-    
-    if results:
-        return json.dumps({"status": "SUCCESS", "data": results}, ensure_ascii=False)
-    else:
-        return json.dumps({"status": "NOT_FOUND", "message": "Không tìm thấy dữ liệu"}, ensure_ascii=False)
+    """Tra cứu lỗi từ MOCK_DATABASE."""
 
+    defect_type_normalized = defect_type.strip().upper()
+    shift_normalized = shift.strip().lower()
+
+    results = []
+
+    for err_id, info in MOCK_DATABASE.items():
+
+        if (
+            info["defect_type"].strip().upper() == defect_type_normalized
+            and info["shift"].strip().lower() == shift_normalized
+        ):
+            record = {
+                "defect_id": err_id,
+                **info
+            }
+
+            results.append(record)
+
+    if results:
+        return json.dumps(
+            {
+                "status": "SUCCESS",
+                "data": results
+            },
+            ensure_ascii=False
+        )
+
+    return json.dumps(
+        {
+            "status": "NOT_FOUND",
+            "message": "Không tìm thấy dữ liệu phù hợp."
+        },
+        ensure_ascii=False
+    )
 
 def execute_create_rework_ticket(defect_ids: str, priority: str) -> str:
-    """Thực thi tạo phiếu (cập nhật status trong MOCK_DATABASE)"""
-    # Cắt chuỗi thành mảng list và loại bỏ khoảng trắng thừa
-    id_list = [i.strip() for i in defect_ids.split(",")]
+    """Tạo phiếu Rework và cập nhật trạng thái lỗi."""
+
+    id_list = [
+        item.strip().upper()
+        for item in defect_ids.split(",")
+        if item.strip()
+    ]
+
     updated_ids = []
-    
+    skipped_ids = []
+    not_found_ids = []
+
     for err_id in id_list:
-        # Kiểm tra key có tồn tại trong Dictionary không
-        if err_id in MOCK_DATABASE:
-            MOCK_DATABASE[err_id]["status"] = "đã tạo phiếu"
-            updated_ids.append(err_id)
-            
-    return json.dumps({
-        "status": "SUCCESS", 
-        "message": f"Đã tạo phiếu Rework mức độ {priority} cho các mã: {', '.join(updated_ids)}"
-    }, ensure_ascii=False)
+
+        if err_id not in MOCK_DATABASE:
+            not_found_ids.append(err_id)
+            continue
+
+        if MOCK_DATABASE[err_id]["status"] == "đã tạo phiếu":
+            skipped_ids.append(err_id)
+            continue
+
+        MOCK_DATABASE[err_id]["status"] = "đã tạo phiếu"
+        MOCK_DATABASE[err_id]["rework_priority"] = priority
+
+        updated_ids.append(err_id)
+
+    return json.dumps(
+        {
+            "status": "SUCCESS",
+            "updated_ids": updated_ids,
+            "skipped_ids": skipped_ids,
+            "not_found_ids": not_found_ids,
+            "message": (
+                f"Đã tạo phiếu Rework mức độ {priority} "
+                f"cho các mã: {', '.join(updated_ids) if updated_ids else 'Không có'}"
+            )
+        },
+        ensure_ascii=False
+    )
 
 
 # ==============================================================================

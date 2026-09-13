@@ -27,38 +27,151 @@ class BaseLLMProvider:
 
 
 class MockOfflineProvider(BaseLLMProvider):
-    """Offline Mock Provider dùng để chạy thử mà không tốn API Key"""
+    """Offline Mock Provider dành cho QC Assistant."""
+
     def __init__(self):
-        self.model_name = "Offline-Mock-Model-2026"
+        self.model_name = "Offline-Mock-QC-Model-2026"
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        return f"[Mock Chatbot Response]: Xin chào! Tôi đã nhận được câu hỏi '{prompt}'. (Chế độ Chatbot không có Tool tra cứu dữ liệu thời gian thực)."
+        return (
+            "[Mock Chatbot Response]: "
+            "Quy trình QC thông thường gồm phát hiện lỗi, ghi nhận lỗi, "
+            "đánh giá mức độ và chuyển sang xử lý/Rework nếu cần."
+        )
 
-    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "") -> Dict[str, Any]:
+    def generate_with_tools(
+        self,
+        prompt: str,
+        tools_schema: List[Dict[str, Any]],
+        system_prompt: str = ""
+    ) -> Dict[str, Any]:
+
         prompt_lower = prompt.lower()
-        
-        # Mô phỏng nhận diện intent gọi Tool
-        if "sv2026001" in prompt_lower and "đặt lịch" in prompt_lower:
-            return {
-                "type": "tool_call",
-                "tool_name": "schedule_appointment",
-                "arguments": {"student_id": "SV2026001", "datetime_str": "14:00 15/09/2026", "advisor_name": "PGS.TS Nguyễn Văn A"},
-                "thought": "Người dùng yêu cầu đặt lịch hẹn tư vấn cho sinh viên SV2026001. Tôi sẽ gọi tool schedule_appointment."
-            }
-        elif "sv2026001" in prompt_lower or "tra cứu" in prompt_lower:
-            return {
-                "type": "tool_call",
-                "tool_name": "academic_query",
-                "arguments": {"student_id": "SV2026001"},
-                "thought": "Người dùng muốn tra cứu thông tin học vụ của sinh viên SV2026001. Tôi sẽ gọi tool academic_query."
-            }
-        else:
+
+        # ------------------------------------------------------
+        # BƯỚC SAU KHI create_rework_ticket ĐÃ CHẠY
+        # ------------------------------------------------------
+        if "tool_result: create_rework_ticket" in prompt_lower:
             return {
                 "type": "text",
-                "content": f"[Mock Agent Response]: Xin chào! Quy chế học vụ VinUni yêu cầu sinh viên tích lũy tối thiểu 120 tín chỉ và duy trì GPA trên 2.0 để tốt nghiệp.",
-                "thought": "Câu hỏi chung về quy chế học vụ, trả lời trực tiếp không cần gọi Tool."
+                "content": "Đã hoàn tất tạo phiếu Rework theo yêu cầu.",
+                "thought": "Tool tạo phiếu Rework đã thực thi thành công."
             }
 
+        # ------------------------------------------------------
+        # BƯỚC SAU KHI query_defect_data ĐÃ CHẠY
+        # ------------------------------------------------------
+        if "tool_result: query_defect_data" in prompt_lower:
+
+            # Nếu không tìm thấy
+            if '"status": "not_found"' in prompt_lower:
+                return {
+                    "type": "text",
+                    "content": "Không tìm thấy dữ liệu lỗi phù hợp với yêu cầu.",
+                    "thought": "Observation trả về NOT_FOUND nên không cần gọi Tool tiếp."
+                }
+
+            # Nếu yêu cầu ban đầu có tạo Rework
+            if "tạo phiếu" in prompt_lower or "rework" in prompt_lower:
+
+                defect_ids = []
+
+                for defect_id in ["ERR-001", "ERR-002", "ERR-003"]:
+                    if defect_id.lower() in prompt_lower:
+                        defect_ids.append(defect_id)
+
+                if defect_ids:
+                    return {
+                        "type": "tool_call",
+                        "tool_name": "create_rework_ticket",
+                        "arguments": {
+                            "defect_ids": ", ".join(defect_ids),
+                            "priority": "Cao" if "cao" in prompt_lower else "Thấp"
+                        },
+                        "thought": (
+                            "Đã có defect ID từ Observation. "
+                            "Tiếp tục tạo phiếu Rework."
+                        )
+                    }
+
+            # Nếu chỉ tra cứu
+            return {
+                "type": "text",
+                "content": "Đã hoàn tất tra cứu dữ liệu lỗi.",
+                "thought": "Observation đã cung cấp dữ liệu cần thiết."
+            }
+
+        # ------------------------------------------------------
+        # YÊU CẦU TẠO PHIẾU TRỰC TIẾP
+        # ------------------------------------------------------
+        if "tạo phiếu" in prompt_lower or "rework" in prompt_lower:
+
+            defect_ids = []
+
+            for defect_id in ["ERR-001", "ERR-002", "ERR-003"]:
+                if defect_id.lower() in prompt_lower:
+                    defect_ids.append(defect_id)
+
+            if defect_ids:
+                return {
+                    "type": "tool_call",
+                    "tool_name": "create_rework_ticket",
+                    "arguments": {
+                        "defect_ids": ", ".join(defect_ids),
+                        "priority": "Cao" if "cao" in prompt_lower else "Thấp"
+                    },
+                    "thought": "Người dùng yêu cầu tạo phiếu Rework cho defect ID cụ thể."
+                }
+
+        # ------------------------------------------------------
+        # YÊU CẦU TRA CỨU
+        # ------------------------------------------------------
+        if (
+            "tra cứu" in prompt_lower
+            or "tìm" in prompt_lower
+            or "ca lỗi" in prompt_lower
+        ):
+
+            defect_type = None
+
+            if "2d" in prompt_lower:
+                defect_type = "2D"
+
+            elif "3d" in prompt_lower:
+                defect_type = "3D"
+
+            shift = None
+
+            if "ca đêm" in prompt_lower:
+                shift = "ca đêm"
+
+            elif "ca ngày" in prompt_lower:
+                shift = "ca ngày"
+
+            if defect_type and shift:
+                return {
+                    "type": "tool_call",
+                    "tool_name": "query_defect_data",
+                    "arguments": {
+                        "defect_type": defect_type,
+                        "shift": shift
+                    },
+                    "thought": (
+                        f"Cần tra cứu lỗi {defect_type} trong {shift}."
+                    )
+                }
+
+        # ------------------------------------------------------
+        # CÂU HỎI CHUNG
+        # ------------------------------------------------------
+        return {
+            "type": "text",
+            "content": (
+                "Quy trình xử lý lỗi QC gồm phát hiện, ghi nhận, "
+                "xác minh và tạo Rework khi cần."
+            ),
+            "thought": "Đây là câu hỏi chung nên không cần gọi Tool."
+        }
 
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini Provider (Native Tool Calling với Google GenAI SDK)"""
