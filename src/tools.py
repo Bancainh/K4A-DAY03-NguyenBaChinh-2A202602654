@@ -1,51 +1,53 @@
 """
-🛠️ TOOL DEFINITIONS & EXECUTION BACKEND
-Mã nguồn chứa danh sách Tool Schemas (JSON Schema) và Execution Layer phục vụ cho MCP Server.
+🛠️ TOOL DEFINITIONS & NATIVE JSON SCHEMAS (Chuẩn OpenAPI / MCP Specification)
+Định nghĩa các Tool Schemas chuẩn hóa dùng cho Native Tool Calling API của LLM.
 """
 
 import json
 from typing import Dict, Any
 
 # ==============================================================================
-# 1. KHAI BÁO TOOL SCHEMAS CHUẨN NATIVE JSON SCHEMA (TASK 1.2)
+# 1. KHAI BÁO TOOL SCHEMAS CHUẨN NATIVE JSON SCHEMA
 # ==============================================================================
 
 TOOLS_SCHEMA = [
-    # Tool 1: Đã được định nghĩa mẫu sẵn cho Học viên tham khảo
+    # --- TOOL 1: TRA CỨU LỖI ---
     {
-        "name": "academic_query",
-        "description": "Tra cứu hồ sơ và thông tin học vụ của sinh viên VinUni bằng mã sinh viên.",
+        "name": "query_defect_data",
+        "description": "Tra cứu danh sách các ca lỗi gán nhãn dựa trên loại lỗi và ca làm việc.",
         "parameters": {
             "type": "object",
             "properties": {
-                "student_id": {
+                "defect_type": {
                     "type": "string",
-                    "description": "Mã sinh viên cần tra cứu (ví dụ: 'SV2026001')"
+                    "description": "Loại lỗi cần tìm (ví dụ: '2D', '3D')"
+                },
+                "shift": {
+                    "type": "string",
+                    "description": "Ca làm việc (ví dụ: 'ca đêm', 'ca ngày')"
                 }
             },
-            "required": ["student_id"]
+            "required": ["defect_type", "shift"] 
         }
     },
     
-    # --------------------------------------------------------------------------
-    # TODO 1.2: HỌC VIÊN HOÀN THIỆN TOOL SCHEMA CHO 'schedule_appointment'
-    # 🎯 YÊU CẦU THIẾT KẾ SCHEMA (JSON SCHEMA STANDARD):
-    # 1. Tool dùng để đặt lịch hẹn tư vấn học vụ với Cố vấn học tập VinUni.
-    # 2. Thiết kế các tham số (properties) để LLM trích xuất:
-    #    - student_id (string): Mã sinh viên cần đặt lịch (ví dụ: 'SV2026001')
-    #    - datetime_str (string): Thời gian hẹn (ví dụ: '14:00 15/09/2026')
-    #    - advisor_name (string): Tên cố vấn học tập
-    # 3. Khai báo danh sách các trường bắt buộc (required).
-    # --------------------------------------------------------------------------
+    # --- TOOL 2: TẠO PHIẾU REWORK (HÀNH ĐỘNG NHẠY CẢM) ---
     {
-        "name": "schedule_appointment",
-        "description": "Đặt lịch hẹn tư vấn học vụ với Cố vấn học tập VinUni.",
+        "name": "create_rework_ticket",
+        "description": "Tạo phiểu Rework cho các ca lỗi đã được tra cứu, với mức độ ưu tiên chỉ định",
         "parameters": {
             "type": "object",
             "properties": {
-                # TODO 1.2: Khai báo các thuộc tính tham số cho Tool tại đây...
+                "defect_ids": {
+                    "type": "string", 
+                    "description": "Danh sách mã ca lỗi cần tạo phiếu (ví dụ: 'ERR-001, ERR-002')"
+                },
+                "priority": {
+                    "type": "string", 
+                    "description": "Mức độ ưu tiên của phiếu Rework (ví dụ: 'Cao', 'Thấp')"
+                }
             },
-            "required": [] # TODO 1.2: Khai báo danh sách các trường bắt buộc tại đây...
+            "required": ["defect_ids", "priority"]
         }
     }
 ]
@@ -54,60 +56,78 @@ TOOLS_SCHEMA = [
 # 2. MÔ PHỎNG DỮ LIỆU & HÀM THỰC THI TOOL (EXECUTION LAYER)
 # ==============================================================================
 
+# Bổ sung Database mẫu cho QC Assistant
 MOCK_DATABASE = {
-    "SV2026001": {
-        "full_name": "Nguyễn Văn An",
-        "class": "AI-K4",
-        "gpa": 3.85,
-        "email": "an.nv@vinuni.edu.vn",
-        "status": "Đang học",
-        "advisor": "PGS.TS Nguyễn Văn A"
+    "ERR-001": {
+        "product_name": "Bo mạch chủ X1",
+        "defect_type": "2D",
+        "shift": "ca đêm",
+        "status": "chưa xử lý",
+        "inspector": "Nguyễn Văn QC"
     },
-    "SV2026002": {
-        "full_name": "Trần Thị Bình",
-        "class": "AI-K4",
-        "gpa": 3.60,
-        "email": "binh.tt@vinuni.edu.vn",
-        "status": "Đang học",
-        "advisor": "TS. Lê Thị B"
+    "ERR-002": {
+        "product_name": "Màn hình OLED",
+        "defect_type": "3D",
+        "shift": "ca ngày",
+        "status": "chưa xử lý",
+        "inspector": "Trần Thị QA"
+    },
+    "ERR-003": {
+        "product_name": "Bo mạch chủ X1",
+        "defect_type": "2D",
+        "shift": "ca đêm",
+        "status": "chưa xử lý",
+        "inspector": "Nguyễn Văn QC"
     }
 }
 
-
-def execute_academic_query(student_id: str) -> str:
-    """Thực thi tra cứu học vụ theo mã sinh viên"""
-    student = MOCK_DATABASE.get(student_id.strip().upper())
-    if student:
-        return json.dumps({
-            "status": "SUCCESS",
-            "student_id": student_id,
-            "data": student
-        }, ensure_ascii=False)
+def execute_query_defect_data(defect_type: str, shift: str) -> str:
+    """Thực thi tra cứu lỗi từ MOCK_DATABASE"""
+    results = []
+    
+    # Duyệt qua các key-value trong Dictionary
+    for err_id, info in MOCK_DATABASE.items():
+        if info["defect_type"] == defect_type and info["shift"] == shift:
+            # Nhúng thêm mã ID vào kết quả trả về để AI biết cần tạo phiếu cho mã nào
+            record = {"defect_id": err_id}
+            record.update(info)
+            results.append(record)
+    
+    if results:
+        return json.dumps({"status": "SUCCESS", "data": results}, ensure_ascii=False)
     else:
-        return json.dumps({
-            "status": "NOT_FOUND",
-            "message": f"Không tìm thấy dữ liệu sinh viên có mã '{student_id}'"
-        }, ensure_ascii=False)
+        return json.dumps({"status": "NOT_FOUND", "message": "Không tìm thấy dữ liệu"}, ensure_ascii=False)
 
 
-def execute_schedule_appointment(student_id: str, datetime_str: str, advisor_name: str = "PGS.TS Nguyễn Văn A") -> str:
-    """Thực thi đặt lịch hẹn tư vấn học vụ"""
+def execute_create_rework_ticket(defect_ids: str, priority: str) -> str:
+    """Thực thi tạo phiếu (cập nhật status trong MOCK_DATABASE)"""
+    # Cắt chuỗi thành mảng list và loại bỏ khoảng trắng thừa
+    id_list = [i.strip() for i in defect_ids.split(",")]
+    updated_ids = []
+    
+    for err_id in id_list:
+        # Kiểm tra key có tồn tại trong Dictionary không
+        if err_id in MOCK_DATABASE:
+            MOCK_DATABASE[err_id]["status"] = "đã tạo phiếu"
+            updated_ids.append(err_id)
+            
     return json.dumps({
-        "status": "SUCCESS",
-        "booking_id": f"BK-{student_id}-99",
-        "student_id": student_id,
-        "datetime": datetime_str,
-        "advisor": advisor_name,
-        "message": f"Đặt lịch thành công cho sinh viên {student_id} với {advisor_name} vào lúc {datetime_str}."
+        "status": "SUCCESS", 
+        "message": f"Đã tạo phiếu Rework mức độ {priority} cho các mã: {', '.join(updated_ids)}"
     }, ensure_ascii=False)
 
 
+# ==============================================================================
+# 3. ROUTER & DISPATCHER (MCP SERVER INTEGRATION)
+# ==============================================================================
+
 # Router gọi tool thực tế
 TOOL_ROUTER = {
-    "academic_query": execute_academic_query,
-    "schedule_appointment": execute_schedule_appointment
+    "query_defect_data": execute_query_defect_data,
+    "create_rework_ticket": execute_create_rework_ticket
 }
 
+# Bổ sung hàm Dispatcher bắt buộc của Lab để MCP Server có thể gọi
 def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> str:
     """Hàm trung chuyển thực thi tool"""
     if tool_name in TOOL_ROUTER:
